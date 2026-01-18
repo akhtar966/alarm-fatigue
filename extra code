@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MED SANCHAR – Alarm Engine (Updated)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-100 p-6">
+
+  <h1 class="text-3xl font-bold mb-4">MED SANCHAR – Smart Alarm Engine</h1>
+
+  <div class="flex gap-4 mb-6">
+    <button id="trigger-burst"
+      class="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold">
+      Trigger 10 Alarms (Alarm Fatigue)
+    </button>
+
+    <button id="trigger-single"
+      class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold">
+      Trigger Single Alarm
+    </button>
+  </div>
+
+  <div class="grid grid-cols-2 gap-6">
+
+    <div>
+      <h2 class="text-xl font-bold mb-2">🚨 Active Alarm</h2>
+      <div id="active-alarm"
+        class="bg-white rounded-lg p-4 shadow text-gray-700">
+        No active alarm
+      </div>
+    </div>
+
+    <div>
+      <h2 class="text-xl font-bold mb-2">📋 Queued Alarms</h2>
+      <div id="queued-alarms"
+        class="bg-white rounded-lg p-4 shadow space-y-2">
+        No queued alarms
+      </div>
+    </div>
+
+  </div>
+
+<script>
+/* =====================================================
+   PATIENT DATA (SIMULATED)
+===================================================== */
+const patients = [
+  { name: "Rohan Sharma", bed: "ICU-05" },
+  { name: "Priya Patel", bed: "GEN-12" },
+  { name: "Amit Singh", bed: "ICU-02" }
+];
+
+/* =====================================================
+   ALARM ENGINE CONFIG
+===================================================== */
+const ALARM_WINDOW_MS = 5000;
+let alarmBuffer = [];
+let alarmTimer = null;
+
+/* =====================================================
+   PRIORITY SCORING (RULE + ML READY)
+===================================================== */
+function calculatePriority(alarm) {
+  let score = 0;
+
+  // Hard clinical rules
+  if (alarm.type === "VENTILATOR_DISCONNECT") score += 100;
+  if (alarm.type === "LOW_SPO2" && alarm.value < 85) score += 95;
+  if (alarm.type === "HIGH_HR" && (alarm.value > 140 || alarm.value < 40)) score += 90;
+
+  // Context
+  if (alarm.patient.bed.includes("ICU")) score += 10;
+  if (alarm.persistent) score += 10;
+  if (alarm.type === "DEVICE_ERROR") score -= 20;
+
+  return score;
+}
+
+/* =====================================================
+   ALARM INGESTION
+===================================================== */
+function ingestAlarm(alarm) {
+  alarm.receivedAt = Date.now();
+  alarm.persistent = false;
+  alarmBuffer.push(alarm);
+
+  if (!alarmTimer) {
+    alarmTimer = setTimeout(processAlarmWindow, ALARM_WINDOW_MS);
+  }
+}
+
+/* =====================================================
+   5-SECOND WINDOW PROCESSING
+===================================================== */
+function processAlarmWindow() {
+
+  const now = Date.now();
+
+  // Step 1: True vs False (simulated persistence check)
+  alarmBuffer.forEach(a => {
+    a.persistent = Math.random() > 0.3; // 70% true alarms
+  });
+
+  // Step 2: Remove false alarms
+  let trueAlarms = alarmBuffer.filter(a => a.persistent);
+
+  if (trueAlarms.length === 0) {
+    resetEngine();
+    return;
+  }
+
+  // Step 3: Priority scoring
+  trueAlarms.forEach(a => a.priority = calculatePriority(a));
+
+  // Step 4: Sort by priority
+  trueAlarms.sort((a, b) => b.priority - a.priority);
+
+  // Step 5: Dispatch top alarm only
+  dispatchAlarm(trueAlarms[0], trueAlarms.slice(1));
+
+  resetEngine();
+}
+
+/* =====================================================
+   DISPATCH
+===================================================== */
+function dispatchAlarm(topAlarm, queued) {
+
+  const activeDiv = document.getElementById("active-alarm");
+  activeDiv.innerHTML = `
+    <p class="font-bold text-red-600 text-lg">${topAlarm.type}</p>
+    <p>Patient: ${topAlarm.patient.name}</p>
+    <p>Bed: ${topAlarm.patient.bed}</p>
+    <p>Value: ${topAlarm.value}</p>
+    <p class="font-semibold">Priority Score: ${topAlarm.priority}</p>
+  `;
+
+  const queueDiv = document.getElementById("queued-alarms");
+  queueDiv.innerHTML = "";
+
+  if (queued.length === 0) {
+    queueDiv.innerHTML = "No queued alarms";
+    return;
+  }
+
+  queued.forEach(a => {
+    const el = document.createElement("div");
+    el.className = "border rounded p-2 text-sm";
+    el.innerHTML = `
+      ${a.type} | ${a.patient.name} | Score: ${a.priority}
+    `;
+    queueDiv.appendChild(el);
+  });
+}
+
+/* =====================================================
+   RESET
+===================================================== */
+function resetEngine() {
+  alarmBuffer = [];
+  alarmTimer = null;
+}
+
+/* =====================================================
+   DEMO BUTTONS
+===================================================== */
+document.getElementById("trigger-burst").onclick = () => {
+  for (let i = 0; i < 10; i++) {
+    ingestAlarm({
+      id: Date.now() + i,
+      type: i % 3 === 0 ? "VENTILATOR_DISCONNECT" :
+            i % 2 === 0 ? "LOW_SPO2" : "HIGH_HR",
+      value: i % 2 === 0 ? 82 : 150,
+      patient: patients[Math.floor(Math.random() * patients.length)]
+    });
+  }
+};
+
+document.getElementById("trigger-single").onclick = () => {
+  ingestAlarm({
+    id: Date.now(),
+    type: "HIGH_HR",
+    value: 145,
+    patient: patients[0]
+  });
+};
+</script>
+
+</body>
+</html>
