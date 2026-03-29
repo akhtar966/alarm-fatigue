@@ -1,4 +1,3 @@
-National 2nd Runner-Up – GE Healthcare Precision Care Challenge (PCC)
 MED SANCHAR – Smart Alarm Management System for Healthcare
 
 *MED SANCHAR* is an intelligent, mobile-first healthcare monitoring and alarm management system designed to reduce alarm fatigue, improve clinical response time, and enhance patient safety in hospital environments.
